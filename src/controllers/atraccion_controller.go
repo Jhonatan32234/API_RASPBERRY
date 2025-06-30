@@ -10,6 +10,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetAtraccionesFromDate godoc
+// @Summary Obtener atracciones desde una fecha
+// @Description Devuelve atracciones a partir de una fecha, y las envía a RabbitMQ
+// @Tags atracciones
+// @Produce json
+// @Param fecha query string true "Fecha desde la cual obtener atracciones (YYYY-MM-DD)"
+// @Success 200 {array} entities.Atraccion
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /atracciones/dia [get]
 func GetAtraccionesFromDate(c *gin.Context) {
 	fecha := c.Query("fecha")
 	if fecha == "" {
@@ -26,6 +36,17 @@ func GetAtraccionesFromDate(c *gin.Context) {
 	c.JSON(http.StatusOK, atracciones)
 }
 
+// CreateAtracciones godoc
+// @Summary Crear una o varias atracciones
+// @Description Crea atracciones en la base de datos y las envía a RabbitMQ si es posible
+// @Tags atracciones
+// @Accept json
+// @Produce json
+// @Param body body []entities.Atraccion true "Arreglo de atracciones o una sola atracción"
+// @Success 201 {array} entities.Atraccion
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /atracciones [post]
 func CreateAtracciones(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {

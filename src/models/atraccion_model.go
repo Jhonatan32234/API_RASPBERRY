@@ -22,7 +22,7 @@ func GetAtraccionesFromDate(fecha string) ([]entities.Atraccion, error) {
 		return atracciones, nil
 	}
 
-	if rabbitmq.Publish(atracciones, "atracciones_queue") {
+	if rabbitmq.PublishToTopic(atracciones, "atracciones_topic", "atraccion.nueva") {
 		err = database.DB.Model(&entities.Atraccion{}).
 			Where("fecha >= ? AND enviado = ?", fecha, false).
 			Update("enviado", true).Error
@@ -55,9 +55,7 @@ func SaveAtracciones(input []entities.Atraccion) ([]entities.Atraccion, error) {
 	var toSend []entities.Atraccion
 	database.DB.Where("enviado = ?", false).Find(&toSend)
 
-	
-
-	if len(toSend) > 0 && rabbitmq.Publish(toSend, "atracciones_queue") {
+	if len(toSend) > 0 && rabbitmq.PublishToTopic(toSend, "atracciones_topic", "atraccion.nueva") {
 		database.DB.Model(&entities.Atraccion{}).Where("enviado = ?", false).Update("enviado", true)
 	}
 

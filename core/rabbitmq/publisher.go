@@ -6,37 +6,50 @@ import (
 	"log"
 )
 
-func Publish[T any](data []T, queueName string) bool {
+func PublishToTopic[T any](data []T, exchangeName string, routingKey string) bool {
 	conn, err := amqp.Dial("amqp://admin:password@localhost:5672/")
 	if err != nil {
-		log.Println("Failed to connect to RabbitMQ", err)
+		log.Println("❌ Falló la conexión a RabbitMQ:", err)
 		return false
 	}
 	defer conn.Close()
 
 	ch, err := conn.Channel()
 	if err != nil {
-		log.Println("Failed to open a channel", err)
+		log.Println("❌ Falló al abrir un canal:", err)
 		return false
 	}
 	defer ch.Close()
 
-	_, err = ch.QueueDeclare(queueName, true, false, false, false, nil)
+	// Declarar exchange de tipo topic
+	err = ch.ExchangeDeclare(
+		exchangeName, // nombre del exchange
+		"topic",      // tipo de exchange
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,          // arguments
+	)
 	if err != nil {
-		log.Println("Queue declare error", err)
+		log.Println("❌ Falló al declarar el exchange:", err)
 		return false
 	}
 
 	body, _ := json.Marshal(data)
 	err = ch.Publish(
-		"", queueName, false, false,
+		exchangeName,
+		routingKey,
+		false,
+		false,
 		amqp.Publishing{
 			ContentType: "application/json",
 			Body:        body,
 		})
 	if err != nil {
-		log.Println("Publish error", err)
+		log.Println("❌ Falló al publicar:", err)
 		return false
 	}
+	log.Println("✅ Publicado correctamente en el topic", routingKey)
 	return true
 }

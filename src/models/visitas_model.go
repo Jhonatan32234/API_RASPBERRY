@@ -24,7 +24,7 @@ func GetVisitasFromDate(fecha string) ([]entities.Visitas, error) {
 	}
 
 	// Publicar en RabbitMQ
-	if rabbitmq.Publish(visitas, "visitas_queue") {
+	if rabbitmq.PublishToTopic(visitas, "visitas_topic", "visita.nueva") {
 		// Marcar como enviadas
 		err = database.DB.Model(&entities.Visitas{}).
 			Where("fecha >= ? AND enviado = ?", fecha, false).
@@ -60,7 +60,8 @@ func SaveVisitas(input []entities.Visitas) ([]entities.Visitas, error) {
 
 
 
-	if len(toSend) > 0 && rabbitmq.Publish(toSend, "visitas_queue") {
+	if len(toSend) > 0 && rabbitmq.PublishToTopic(toSend, "visitas_topic", "visita.nueva") {
+
 		database.DB.Model(&entities.Visitas{}).Where("enviado = ?", false).Update("enviado", true)
 	}
 

@@ -10,6 +10,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetVisitasFromDate godoc
+// @Summary Obtener visitas desde una fecha
+// @Description Devuelve visitas a partir de una fecha, y las envía a RabbitMQ
+// @Tags visitas
+// @Produce json
+// @Param fecha query string true "Fecha desde la cual obtener visitas (YYYY-MM-DD)"
+// @Success 200 {array} entities.Visitas
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /visitas/dia [get]
 func GetVisitasFromDate(c *gin.Context) {
 	fecha := c.Query("fecha") // Fecha en formato string (ej. "2025-06-10")
 	if fecha == "" {
@@ -26,7 +36,17 @@ func GetVisitasFromDate(c *gin.Context) {
 	c.JSON(http.StatusOK, visitas)
 }
 
-
+// CreateVisitas godoc
+// @Summary Crear una o varias visitas
+// @Description Crea visitas en la base de datos y las envía a RabbitMQ si es posible
+// @Tags visitas
+// @Accept json
+// @Produce json
+// @Param body body []entities.Visitas true "Arreglo de visitas o una sola visita"
+// @Success 201 {array} entities.Visitas
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /visitas [post]
 func CreateVisitas(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
