@@ -24,7 +24,7 @@ func GetVisitasFromDate(fecha string) ([]entities.Visitas, error) {
 	}
 
 	// Publicar en RabbitMQ
-	if rabbitmq.PublishToTopic(visitas, "visitas_topic", "visita.nueva") {
+	if rabbitmq.PublishToTopic(visitas, "visitas_topic", "visita.data") {
 		// Marcar como enviadas
 		err = database.DB.Model(&entities.Visitas{}).
 			Where("fecha >= ? AND enviado = ?", fecha, false).
@@ -58,11 +58,13 @@ func SaveVisitas(input []entities.Visitas) ([]entities.Visitas, error) {
 	var toSend []entities.Visitas
 	database.DB.Where("enviado = ?", false).Find(&toSend)
 
-
-
-	if len(toSend) > 0 && rabbitmq.PublishToTopic(toSend, "visitas_topic", "visita.nueva") {
-
+	if len(toSend) > 0 && rabbitmq.PublishToTopic(toSend, "visitas_topic", "visita.data") {
 		database.DB.Model(&entities.Visitas{}).Where("enviado = ?", false).Update("enviado", true)
+
+		// 🔁 Enviar por zona solo el ID
+		for _, item := range toSend {
+			rabbitmq.PublishIDToZoneTopic("visitas_topic", item.Zona, item.Id, "visitas")
+		}
 	}
 
 	return toSend, nil
