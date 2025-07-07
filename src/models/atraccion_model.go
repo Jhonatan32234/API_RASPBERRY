@@ -22,7 +22,7 @@ func GetAtraccionesFromDate(fecha string) ([]entities.Atraccion, error) {
 		return atracciones, nil
 	}
 
-	if rabbitmq.PublishToTopic(atracciones, "atracciones_topic", "atraccion.nueva") {
+	if rabbitmq.PublishToTopic(atracciones, "atracciones_topic", "atraccion.data") {
 		err = database.DB.Model(&entities.Atraccion{}).
 			Where("fecha >= ? AND enviado = ?", fecha, false).
 			Update("enviado", true).Error
@@ -55,9 +55,15 @@ func SaveAtracciones(input []entities.Atraccion) ([]entities.Atraccion, error) {
 	var toSend []entities.Atraccion
 	database.DB.Where("enviado = ?", false).Find(&toSend)
 
-	if len(toSend) > 0 && rabbitmq.PublishToTopic(toSend, "atracciones_topic", "atraccion.nueva") {
+	if len(toSend) > 0 && rabbitmq.PublishToTopic(toSend, "atracciones_topic", "atraccion.data") {
 		database.DB.Model(&entities.Atraccion{}).Where("enviado = ?", false).Update("enviado", true)
+
+		// 🔁 Enviar por zona solo el ID
+		for _, item := range toSend {
+			rabbitmq.PublishIDToZoneTopic("atracciones_topic", item.Zona, item.Id, "atracciones")
+		}
 	}
+
 
 	return toSend, nil
 }

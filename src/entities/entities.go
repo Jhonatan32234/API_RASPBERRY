@@ -5,6 +5,7 @@ type Visitas struct {
 	Visitantes int   `json:"visitantes"`
 	Hora      string `json:"hora"`
 	Fecha     string `json:"fecha"`
+	Zona      string `json:"zona"` // Nuevo campo
 	Enviado   bool   `json:"enviado"`
 }
 
@@ -14,5 +15,7 @@ type Atraccion struct {
 	Tiempo  int    `json:"tiempo"`
 	Hora    string `json:"hora"`
 	Fecha   string `json:"fecha"`
+	Zona    string `json:"zona"` // Nuevo campo
 	Enviado bool   `json:"enviado"`
 }
+
