@@ -1,172 +1,153 @@
+// src/controllers/webcam_controller.go
 package controllers
 
 import (
-	"bytes"
+	"bufio"
+	"context"
 	"encoding/json"
-	"image"
-	"log"
-	"math"
+	"errors"
 	"net/http"
+	"os"
+	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gocv.io/x/gocv"
 )
+
+/* ---------- Tipo para la respuesta ---------- */
+
+type peopleResp struct {
+	People int `json:"people"`
+}
+
+/* ---------- Sesión global protegida ---------- */
+
+// Cada puerta sólo puede tener un conteo activo a la vez.
+// Si en el futuro hay varias puertas, usa un map[doorID]*session.
+type session struct {
+	cmd    *exec.Cmd
+	stdout *bufio.Reader
+}
 
 var (
-	cameraActive      bool
-	stopChan          chan bool
-	mutex             sync.Mutex
-	contadorVisitas   int
-	lastDetectionTime time.Time
-	lastDetectionRect image.Rectangle
+	mu   sync.Mutex
+	curr *session
 )
 
-func distanciaRects(a, b image.Rectangle) float64 {
-	cx1, cy1 := float64(a.Min.X+a.Dx()/2), float64(a.Min.Y+a.Dy()/2)
-	cx2, cy2 := float64(b.Min.X+b.Dx()/2), float64(b.Min.Y+b.Dy()/2)
+/* ---------- Auxiliares ---------- */
 
-	dx := cx2 - cx1
-	dy := cy2 - cy1
-	return math.Sqrt(dx*dx + dy*dy)
-}
-
-func StartWebcam(c *gin.Context) {
-	contadorVisitas = 0
-
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	if cameraActive {
-		c.JSON(http.StatusOK, gin.H{"message": "La cámara ya está activa"})
-		return
+// inicia el script si no hay otro corriendo
+func startCounting(ctx context.Context) error {
+	mu.Lock()
+	defer mu.Unlock()
+	if curr != nil {
+		return errors.New("ya hay un conteo en curso")
 	}
 
-	stopChan = make(chan bool)
-	cameraActive = true
+	// Ruta ABSOLUTA al script Python
+	script := "/opt/museum/detect_people.py"
 
-	go func() {
-		webcam, err := gocv.OpenVideoCapture(0)
-		// Inicializa el descriptor HOG para detección de personas
-		hog := gocv.NewHOGDescriptor()
-		hog.SetSVMDetector(gocv.HOGDefaultPeopleDetector())
-		defer hog.Close()
+	cmd := exec.CommandContext(ctx, "python3", script, "--stream")
+	stdout, _ := cmd.StdoutPipe()
 
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	curr = &session{cmd: cmd, stdout: bufio.NewReader(stdout)}
+	return nil
+}
+
+// detiene el script y devuelve la cuenta total
+func stopCounting(ctx context.Context) (int, error) {
+	mu.Lock()
+	sess := curr
+	curr = nil
+	mu.Unlock()
+
+	if sess == nil {
+		return 0, errors.New("no hay conteo en curso")
+	}
+
+	// Señal suave: SIGINT permite que el script cierre limpiamente
+	if err := sess.cmd.Process.Signal(os.Interrupt); err != nil {
+		return 0, err
+	}
+
+	// Espera con timeout a que termine
+	done := make(chan error, 1)
+	go func() { done <- sess.cmd.Wait() }()
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case err := <-done:
 		if err != nil {
-			log.Println("❌ Error al abrir la webcam:", err)
-			cameraActive = false
-			return
+			return 0, err
 		}
-		defer webcam.Close()
+	}
 
-		img := gocv.NewMat()
-		defer img.Close()
-
-		log.Println("📷 Webcam iniciada")
-		var personaPresente bool
-		var tiempoUltimaAusencia time.Time
-
-		for {
-			select {
-			case <-stopChan:
-				log.Println("🛑 Webcam detenida")
-				return
-			default:
-				if ok := webcam.Read(&img); !ok || img.Empty() {
-					continue
-				}
-
-				// Detectar personas
-				rects := hog.DetectMultiScale(img)
-
-				log.Printf("🧍 Detecciones: %d\n", len(rects))
-
-				// dentro del bucle
-				if len(rects) > 0 {
-					if !personaPresente {
-						now := time.Now()
-						if now.Sub(tiempoUltimaAusencia) > 3*time.Second {
-							contadorVisitas++
-							personaPresente = true
-							log.Printf("👤 Persona detectada. Total: %d\n", contadorVisitas)
-						}
-					}
-				} else {
-					if personaPresente {
-						tiempoUltimaAusencia = time.Now()
-						personaPresente = false
-					}
-				}
-
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-
-	}()
-
-	c.JSON(http.StatusOK, gin.H{"message": "Webcam iniciada"})
+	// Lee la última línea JSON del stdout
+	line, err := sess.stdout.ReadBytes('\n')
+	if err != nil {
+		return 0, err
+	}
+	var obj struct {
+		People int `json:"people"`
+	}
+	if err := json.Unmarshal(line, &obj); err != nil {
+		return 0, err
+	}
+	return obj.People, nil
 }
 
+/* ---------- Handlers ---------- */
+
+// StartWebcam godoc
+// @Summary Iniciar conteo de personas
+// @Description Señal de puerta abierta: arranca el script Python para contar visitantes
+// @Tags webcam
+// @Produce json
+// @Success 200 {object} map[string]string "status: counting"
+// @Failure 409 {object} map[string]string "ya hay conteo"
+// @Failure 500 {object} map[string]string "error interno"
+// @Router /webcam/start [post]
+func StartWebcam(c *gin.Context) {
+	if err := startCounting(c.Request.Context()); err != nil {
+		status := http.StatusConflict
+		if !errors.Is(err, errors.New("ya hay un conteo en curso")) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "counting"})
+}
+
+// StopWebcam godoc
+// @Summary Detener conteo y devolver total
+// @Description Señal de puerta cerrada: detiene el script y responde con # de personas
+// @Tags webcam
+// @Produce json
+// @Success 200 {object} peopleResp
+// @Failure 409 {object} map[string]string "no hay conteo"
+// @Failure 500 {object} map[string]string "error interno"
+// @Router /webcam/stop [post]
 func StopWebcam(c *gin.Context) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
 
-	if !cameraActive {
-		c.JSON(http.StatusOK, gin.H{"message": "La cámara no está activa"})
-		return
-	}
-
-	stopChan <- true
-	close(stopChan)
-	cameraActive = false
-
-	// Obtener fecha y hora actual
-	now := time.Now()
-	fecha := now.Format("2006-01-02")
-	hora := now.Format("15:04")
-
-	// Crear estructura
-	type Visita struct {
-		Id         int    `json:"id"`
-		Visitantes int    `json:"visitantes"`
-		Hora       string `json:"hora"`
-		Fecha      string `json:"fecha"`
-		Enviado    bool   `json:"enviado"`
-	}
-
-	visita := Visita{
-		Id:         0,
-		Visitantes: contadorVisitas,
-		Hora:       hora,
-		Fecha:      fecha,
-		Enviado:    false,
-	}
-
-	payload, err := json.Marshal([]Visita{visita})
+	total, err := stopCounting(ctx)
 	if err != nil {
-		log.Println("❌ Error serializando visita:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo preparar la visita"})
+		status := http.StatusInternalServerError
+		if errors.Is(err, errors.New("no hay conteo en curso")) {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Enviar POST a /visitas
-	resp, err := http.Post("http://localhost:8080/visitas", "application/json", bytes.NewBuffer(payload))
-	if err != nil {
-		log.Println("❌ Error haciendo POST a /visitas:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message":    "Webcam detenida",
-			"visitantes": contadorVisitas,
-			"error":      "No se pudo registrar la visita",
-		})
-		return
-	}
-	defer resp.Body.Close()
+	// Aquí podrías guardar en BD o publicar en RabbitMQ
+	// models.SaveVisitas(...) o core.rabbitmq.Publisher.Publish(total)
 
-	log.Println("✅ Visita enviada a /visitas")
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":    "Webcam detenida",
-		"visitantes": contadorVisitas,
-	})
+	c.JSON(http.StatusOK, peopleResp{People: total})
 }
