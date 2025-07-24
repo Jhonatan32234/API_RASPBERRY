@@ -1,4 +1,3 @@
-
 import cv2
 import time
 from datetime import datetime
@@ -18,9 +17,6 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "dog", "horse", "motorbike", "person", "pottedplant",
            "sheep", "sofa", "train", "tvmonitor"]
 
-#cap = cv2.VideoCapture(0)
-
-#aqui empieza la funcion para la raspberry
 def encontrar_camara_valida():
     for i in range(36):  # tienes del 0 al 35
         path = f'/dev/video{i}'
@@ -37,15 +33,16 @@ cap = encontrar_camara_valida()
 if cap is None:
     exit(1)
 
-#aqui termina
-
-""" if not cap.isOpened():
+"""
+descomentar para regresar a la normalidad
+if not cap.isOpened():
     print("No se pudo abrir la cámara.")
-    exit() """
+    exit() 
+"""
 
 print("Iniciando detección...")
 
-cv2.namedWindow("Detección", cv2.WINDOW_NORMAL)
+# cv2.namedWindow("Detección", cv2.WINDOW_NORMAL)
 
 inicio_intervalo = time.time()
 nuevas_personas = 0
@@ -105,7 +102,7 @@ try:
         cv2.putText(frame, f'Total entradas: {nuevas_personas}', (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
-        cv2.imshow("Detección", frame)
+        # cv2.imshow("Detección", frame)
 
         # Guardar en archivo si se cumple el intervalo
         if tiempo_actual - inicio_intervalo >= INTERVALO_SEGUNDOS:
@@ -119,10 +116,10 @@ try:
             nuevas_personas = 0
             inicio_intervalo = tiempo_actual
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            print("Saliendo por tecla 'q'...")
-            break
+        # if cv2.waitKey(1) & 0xFF == ord('q'):
+        #     print("Saliendo por tecla 'q'...")
+        #     break
 
 finally:
     cap.release()
-    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
