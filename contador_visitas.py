@@ -70,7 +70,7 @@ try:
 
         if time.time() - inicio_intervalo >= INTERVALO_SEGUNDOS:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            resultado = f"{timestamp} - Personas entraron: {nuevas_personas}\n"
+            resultado = f"{nuevas_personas}\n"
             print(f"🕒 Guardando en TXT: {resultado.strip()}")
 
             with open('registro_personas.txt', 'a', encoding='utf-8') as archivo:
