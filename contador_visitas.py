@@ -1,8 +1,12 @@
+
 import cv2
 import time
 from datetime import datetime
+import numpy as np
 
 INTERVALO_SEGUNDOS = 10
+UMBRAL_DISTANCIA = 50
+TIEMPO_CENTRO_SEGUIMIENTO = 3  # segundos
 
 net = cv2.dnn.readNetFromCaffe(
     'MobileNetSSD_deploy.prototxt',
@@ -25,7 +29,7 @@ cv2.namedWindow("Detección", cv2.WINDOW_NORMAL)
 
 inicio_intervalo = time.time()
 nuevas_personas = 0
-persona_en_cuadro = False
+centros_recientes = []  # [(x, y, timestamp)]
 
 try:
     while True:
@@ -41,34 +45,50 @@ try:
         net.setInput(blob)
         detections = net.forward()
 
-        conteo_personas_frame = 0
+        tiempo_actual = time.time()
+        nuevos_centros = []
 
         for i in range(detections.shape[2]):
             confidence = detections[0, 0, i, 2]
             if confidence > 0.5:
                 idx = int(detections[0, 0, i, 1])
                 if CLASSES[idx] == "person":
-                    conteo_personas_frame += 1
-                    box = detections[0, 0, i, 3:7] * [w, h, w, h]
+                    box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
                     (startX, startY, endX, endY) = box.astype("int")
+
+                    centroX = int((startX + endX) / 2)
+                    centroY = int((startY + endY) / 2)
+                    nuevo_centro = (centroX, centroY)
+
+                    # Dibujar la caja y centro
                     cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 255, 0), 2)
+                    cv2.circle(frame, nuevo_centro, 5, (255, 0, 0), -1)
 
-        if conteo_personas_frame > 0 and not persona_en_cuadro:
-            nuevas_personas += 1
-            persona_en_cuadro = True
-            print("🟢 Una persona entró al cuadro.")
+                    # Verificar si ya fue contado recientemente
+                    ya_contado = False
+                    for cx, cy, t in centros_recientes:
+                        dist = np.linalg.norm(np.array((cx, cy)) - np.array(nuevo_centro))
+                        if dist < UMBRAL_DISTANCIA:
+                            ya_contado = True
+                            break
 
-        if conteo_personas_frame == 0 and persona_en_cuadro:
-            persona_en_cuadro = False
+                    if not ya_contado:
+                        nuevas_personas += 1
+                        print("🟢 Nueva persona detectada")
+                        centros_recientes.append((centroX, centroY, tiempo_actual))
 
-        cv2.putText(frame, f'Personas en cuadro: {conteo_personas_frame}', (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        cv2.putText(frame, f'Total entradas: {nuevas_personas}', (10, 60),
+                    nuevos_centros.append((centroX, centroY, tiempo_actual))
+
+        # Limpiar centros viejos
+        centros_recientes = [(x, y, t) for (x, y, t) in centros_recientes if tiempo_actual - t < TIEMPO_CENTRO_SEGUIMIENTO]
+
+        cv2.putText(frame, f'Total entradas: {nuevas_personas}', (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         cv2.imshow("Detección", frame)
 
-        if time.time() - inicio_intervalo >= INTERVALO_SEGUNDOS:
+        # Guardar en archivo si se cumple el intervalo
+        if tiempo_actual - inicio_intervalo >= INTERVALO_SEGUNDOS:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             resultado = f"{nuevas_personas}\n"
             print(f"🕒 Guardando en TXT: {resultado.strip()}")
@@ -77,7 +97,7 @@ try:
                 archivo.write(resultado)
 
             nuevas_personas = 0
-            inicio_intervalo = time.time()
+            inicio_intervalo = tiempo_actual
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Saliendo por tecla 'q'...")
@@ -86,4 +106,3 @@ try:
 finally:
     cap.release()
     cv2.destroyAllWindows()
-

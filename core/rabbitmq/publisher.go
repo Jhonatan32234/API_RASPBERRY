@@ -2,15 +2,16 @@ package rabbitmq
 
 import (
 	"encoding/json"
-	"github.com/streadway/amqp"
 	"log"
+
+	"github.com/streadway/amqp"
 )
 
 func PublishToTopic[T any](data []T, exchangeName string, routingKey string) bool {
 	log.Println("🚀 Iniciando PublishToTopic...")
 
 	log.Println("🔌 Intentando conectar a RabbitMQ...")
-	conn, err := amqp.Dial("amqp://admin:password@localhost:5672/")
+	conn, err := amqp.Dial("amqp://admin:password@54.226.109.12:5672/")
 	if err != nil {
 		log.Println("❌ Falló la conexión a RabbitMQ:", err)
 		return false
@@ -77,7 +78,7 @@ func PublishIDToZoneTopic(exchangeName string, zona string, id int, tipo string)
 	log.Println("🚀 Iniciando PublishIDToZoneTopic...")
 
 	log.Println("🔌 Intentando conectar a RabbitMQ...")
-	conn, err := amqp.Dial("amqp://admin:password@localhost:5672/")
+	conn, err := amqp.Dial("amqp://admin:password@54.226.109.12:5672/")
 	if err != nil {
 		log.Println("❌ Falló la conexión a RabbitMQ:", err)
 		return false
@@ -120,7 +121,7 @@ func PublishIDToZoneTopic(exchangeName string, zona string, id int, tipo string)
 	log.Printf("🔧 Generando routingKey: %s\n", routingKey)
 
 	log.Printf("🧬 Serializando ID (%d) a JSON...\n", id)
-	
+
 	body, err := json.Marshal(map[string]int{"id": id})
 	if err != nil {
 		log.Println("❌ Error al serializar el ID:", err)

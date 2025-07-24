@@ -54,29 +54,6 @@ func StartWebcam(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Detección iniciada"})
 }
 
-// Detener detección (matar proceso Python)
-/* func StopWebcam(c *gin.Context) {
-	log.Printf("entro al controller")
-	mu.Lock()
-	defer mu.Unlock()
-
-	if pythonCmd == nil || pythonCmd.Process == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "No hay detección en ejecución"})
-		return
-	}
-
-	err := pythonCmd.Process.Kill()
-	if err != nil {
-		log.Printf("Error al detener script Python: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo detener la detección"})
-		return
-	}
-
-	pythonCmd = nil
-	c.JSON(http.StatusOK, gin.H{"message": "Detección detenida"})
-}
-*/
-
 func StopWebcam(c *gin.Context) {
 	log.Printf("entro al controller")
 	mu.Lock()
@@ -87,7 +64,6 @@ func StopWebcam(c *gin.Context) {
 		return
 	}
 
-	// Intentar detener el proceso Python
 	err := pythonCmd.Process.Kill()
 	if err != nil {
 		log.Printf("Error al detener script Python: %v", err)
@@ -107,21 +83,15 @@ func StopWebcam(c *gin.Context) {
 	}
 
 	lines := strings.Split(string(data), "\n")
-	var lastCount int
 	var totalIntervalo int
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := lines[i]
-		if strings.Contains(line, "Personas entraron:") {
-			parts := strings.Split(line, "Personas entraron:")
-			if len(parts) == 2 {
-				countStr := strings.TrimSpace(parts[1])
-				count, err := strconv.Atoi(countStr)
-				if err == nil {
-					lastCount = count
-					totalIntervalo = totalIntervalo + lastCount
-
-				}
-			}
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		count, err := strconv.Atoi(line)
+		if err == nil {
+			totalIntervalo += count
 		}
 	}
 	log.Printf("cantidad de ultima sesion: %v", totalIntervalo)
@@ -160,6 +130,6 @@ func StopWebcam(c *gin.Context) {
 	log.Printf("visitas guardadas... a mimir")
 	c.JSON(http.StatusOK, gin.H{
 		"message":    "Detección detenida",
-		"visitantes": lastCount,
+		"visitantes": totalIntervalo,
 	})
 }
