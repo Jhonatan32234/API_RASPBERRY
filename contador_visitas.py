@@ -21,25 +21,27 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 #cap = cv2.VideoCapture(0)
 
 #aqui empieza la funcion para la raspberry
-def abrir_camara(indices):
-    for i in indices:
-        cap = cv2.VideoCapture(i)
+def encontrar_camara_valida():
+    for i in range(36):  # tienes del 0 al 35
+        path = f'/dev/video{i}'
+        cap = cv2.VideoCapture(path)
         if cap.isOpened():
-            ret, _ = cap.read()
-            if ret:
-                print(f"Cámara abierta en índice {i} (/dev/video{i})")
-                return cap
-            cap.release()
+            print(f"✅ Cámara encontrada en {path}")
+            return cap
+        cap.release()
+    print("❌ No se encontró ninguna cámara válida.")
     return None
 
-indices_a_probar = list(range(19, 36))
-cap = abrir_camara(indices_a_probar)
+cap = encontrar_camara_valida()
+
+if cap is None:
+    exit(1)
 
 #aqui termina
 
-if not cap.isOpened():
+""" if not cap.isOpened():
     print("No se pudo abrir la cámara.")
-    exit()
+    exit() """
 
 print("Iniciando detección...")
 
