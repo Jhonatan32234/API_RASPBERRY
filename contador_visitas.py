@@ -18,7 +18,25 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
            "dog", "horse", "motorbike", "person", "pottedplant",
            "sheep", "sofa", "train", "tvmonitor"]
 
-cap = cv2.VideoCapture(0)
+#cap = cv2.VideoCapture(0)
+
+#aqui empieza la funcion para la raspberry
+def abrir_camara(indices):
+    for i in indices:
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, _ = cap.read()
+            if ret:
+                print(f"Cámara abierta en índice {i} (/dev/video{i})")
+                return cap
+            cap.release()
+    return None
+
+indices_a_probar = list(range(19, 36))
+cap = abrir_camara(indices_a_probar)
+
+#aqui termina
+
 if not cap.isOpened():
     print("No se pudo abrir la cámara.")
     exit()
