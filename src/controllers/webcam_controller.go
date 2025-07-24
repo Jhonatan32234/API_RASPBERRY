@@ -3,6 +3,7 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"sync"
 
@@ -16,6 +17,7 @@ var (
 
 // Iniciar detección (ejecutar script Python)
 func StartWebcam(c *gin.Context) {
+	log.Printf("entró al controller")
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -24,8 +26,11 @@ func StartWebcam(c *gin.Context) {
 		return
 	}
 
-	cmd := exec.Command("python3", "scripts/deteccion.py") // Ajusta ruta si es necesario
+	cmd := exec.Command("./venv/bin/python", "./contador_visitas.py")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
+	log.Printf("despues de exec.comand")
 	err := cmd.Start()
 	if err != nil {
 		log.Printf("Error al iniciar script Python: %v", err)
@@ -39,6 +44,7 @@ func StartWebcam(c *gin.Context) {
 
 // Detener detección (matar proceso Python)
 func StopWebcam(c *gin.Context) {
+	log.Printf("entro al controller")
 	mu.Lock()
 	defer mu.Unlock()
 
