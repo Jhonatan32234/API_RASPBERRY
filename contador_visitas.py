@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 import numpy as np
 
-INTERVALO_SEGUNDOS = 10
+INTERVALO_SEGUNDOS = 5
 UMBRAL_DISTANCIA = 50
 TIEMPO_CENTRO_SEGUIMIENTO = 3  # segundos
 
